@@ -2,6 +2,7 @@ import asyncio
 import sqlite3
 from datetime import datetime, timedelta
 
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from aiogram import Bot, Dispatcher, F
 from aiogram.types import Message
 from aiogram.filters import Command
@@ -147,10 +148,52 @@ async def nalog(message: Message):
         await message.answer("Налогов нет.")
         return
 
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="💳 Оплатить налог",
+                    callback_data="pay_tax"
+                )
+            ]
+        ]
+    )
+
     await message.answer(
         f"Текущий налог: {user[5]} чая\n"
-        f"Срок оплаты: 24 часа"
+        f"Срок оплаты: 24 часа",
+        reply_markup=kb
     )
+
+
+
+
+
+@dp.callback_query(F.data == "pay_tax")
+async def pay_tax(callback: CallbackQuery):
+    user = get_user(callback.from_user.id)
+
+    tax_due = user[5]
+    tea = user[1]
+
+    if tax_due == 0:
+        await callback.answer("Налогов нет.", show_alert=True)
+        return
+
+    if tea < tax_due:
+        await callback.answer("Недостаточно чая.", show_alert=True)
+        return
+
+    # списываем чай
+    update_user(callback.from_user.id, "tea", tea - tax_due)
+
+    # обнуляем налог
+    update_user(callback.from_user.id, "tax_due", 0)
+    update_user(callback.from_user.id, "tax_level", 0)
+    update_user(callback.from_user.id, "frozen", 0)
+    update_user(callback.from_user.id, "warned", 0)
+
+    await callback.message.edit_text("✅ Налог успешно оплачен.")
 
 
 # ================= АВТО НАЛОГ =================
@@ -231,6 +274,38 @@ async def tax_warning_system():
 
         await asyncio.sleep(60)
 
+@dp.message(Command("evreygandon"))
+async def evreygandon(message: Message):
+    args = message.text.split()
+
+    if len(args) != 2:
+        await message.answer("Использование: /evreygandon число")
+        return
+
+    try:
+        amount = int(args[1])
+    except ValueError:
+        await message.answer("Нужно указать число.")
+        return
+
+    if amount <= 0:
+        await message.answer("Число должно быть больше 0.")
+        return
+
+    user = get_user(message.from_user.id)
+
+    new_tea = user[1] + amount
+    new_res = user[3] + amount
+
+    update_user(message.from_user.id, "tea", new_tea)
+    update_user(message.from_user.id, "resources", new_res)
+
+    await message.answer(
+        f"Выдано:\n"
+        f"+{amount} чая\n"
+        f"+{amount} ресурсов"
+    )
+
 
 # ================= DEV COMMANDS =================
 
@@ -241,6 +316,10 @@ async def dev1(message: Message):
 @dp.message(Command("shop"))
 async def dev2(message: Message):
     await message.answer("🚧 В разработке")
+
+@dp.message(Command("anal"))
+async def dev3(message: Message):
+    await message.answer("канал всевеликой чайханы :https://t.me/chaikhana48")
 
 
 # ================= START =================
